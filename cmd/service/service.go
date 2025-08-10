@@ -1,7 +1,10 @@
-package gofunc
+package service
 
-func TaskManager() {}
+// TaskManager used as a goroutine to process tasks when they appear in model.TasksMap.Channel
+func TaskManager() {
 
-func Downloader() {}
+}
 
-func Archiver() {}
+func downloader() {}
+
+func archiver() {}

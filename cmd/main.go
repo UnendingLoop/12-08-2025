@@ -15,9 +15,9 @@ func main() {
 	taskHandler := handler.TasksHandler{Pool: &model.TasksMap{Mapa: make(map[string]*model.Task), Channel: make(chan *model.Task)}}
 	defer close(taskHandler.Pool.Channel)
 
-	r.Post("/tasks", taskHandler.CreateNewTask)              //создание задачи, возвращает ID
-	r.Get("/tasks/{id}", taskHandler.StatusCheck)            //получение статуса задачи(возможно со ссылкой на скачивание архива если готово)
-	r.Post("/tasks/{id}/addlink", taskHandler.AddLinkToTask) //добавление ссылки на скачивание файла - 1 ссылка за раз
+	r.Post("/tasks", taskHandler.CreateNewTask)      //создание задачи, возвращает ID
+	r.Get("/tasks/{id}", taskHandler.StatusCheck)    //получение статуса задачи(возможно со ссылкой на скачивание архива если готово)
+	r.Post("/tasks/{id}", taskHandler.AddLinkToTask) //добавление ссылки на скачивание файла - 1 ссылка за раз
 
 	//Starting server
 
