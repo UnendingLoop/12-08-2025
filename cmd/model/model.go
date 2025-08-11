@@ -16,26 +16,27 @@ const (
 )
 
 type Task struct {
-	TID        string     `json:"id"`
-	FilesCount int        `json:"files_count"`
-	Files      []FileInfo `json:"files_info"`
-	Status     Status     `json:"task_status"`
-	Archive    *string    `json:"archive_link,omitempty"`
+	TID        string       `json:"id"`
+	FilesCount atomic.Int32 `json:"-"`
+	Files      []*FileInfo  `json:"files_info"`
+	Status     Status       `json:"task_status"`
+	Archive    *string      `json:"archive_link,omitempty"`
 	sync.RWMutex
 }
 
 type FileInfo struct {
-	URL    string  `json:"file_URL"`
-	Name   string  `json:"-"`           //фактическое имя файла
-	Status Status  `json:"file_status"` //pending, ready, error
-	Error  *string `json:"file_err,omitempty"`
+	URL    string `json:"file_URL"`
+	Name   string `json:"-"`           //фактическое имя файла
+	Status Status `json:"file_status"` //pending, ready, error
+	Error  *error `json:"-"`
 }
 
 type TasksMap struct {
 	Mapa             map[string]*Task
 	ActiveTasksCount atomic.Int32 //для отслеживания загруженности
 	Channel          chan *Task
-	sync.RWMutex
+	sync.RWMutex                   //только для доступа к мапе
+	Done             chan struct{} // сигнал на завершение
 }
 type NewLink struct {
 	URL string `json:"file_URL"`

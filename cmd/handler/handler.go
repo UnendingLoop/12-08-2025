@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -28,7 +29,7 @@ func (h *TasksHandler) CreateNewTask(w http.ResponseWriter, r *http.Request) {
 	newID := uuid.New().String()
 	newTask := &model.Task{
 		TID:    newID,
-		Files:  []model.FileInfo{},
+		Files:  []*model.FileInfo{},
 		Status: model.StatusPending}
 
 	h.Pool.Mapa[newID] = newTask
@@ -54,14 +55,13 @@ func (h *TasksHandler) AddLinkToTask(w http.ResponseWriter, r *http.Request) {
 	task, exists := h.Pool.Mapa[tid]
 	h.Pool.Unlock()
 
+	task.Lock()
 	if !exists {
 		http.Error(w, fmt.Sprintf("Task with ID '%s' doesn't exist", tid), http.StatusNotFound)
 		return
 	}
-	task.Lock()
-	defer task.Unlock()
 
-	if task.FilesCount == 3 {
+	if task.FilesCount.Load() == 3 {
 		http.Error(w, fmt.Sprintf("Failed to add link to task '%s': %v", tid, model.ErrTaskIsFull), http.StatusConflict)
 		return
 	}
@@ -71,7 +71,7 @@ func (h *TasksHandler) AddLinkToTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	//чистка от пробелов + валидация по фортмау
-	newLink.URL = strings.ToLower(strings.TrimSpace(newLink.URL))
+	newLink.URL = strings.TrimSpace(newLink.URL)
 	if _, err := url.ParseRequestURI(newLink.URL); err != nil {
 		http.Error(w, fmt.Sprintf("Invalid URL format '%s'", newLink.URL), http.StatusBadRequest)
 		return
@@ -93,22 +93,27 @@ func (h *TasksHandler) AddLinkToTask(w http.ResponseWriter, r *http.Request) {
 	for _, v := range task.Files {
 		if v.URL == newLink.URL {
 			http.Error(w, fmt.Sprintf("Link '%s' already in task '%s'", newLink.URL, tid), http.StatusBadRequest)
+			task.Unlock()
 			return
 		}
 	}
 
 	newFile := model.FileInfo{URL: newLink.URL}
 	newFile.Status = model.StatusPending
-	task.Files = append(task.Files, newFile)
-	task.FilesCount++
+	task.Files = append(task.Files, &newFile)
+	task.Unlock()
+
+	task.FilesCount.Add(1)
 
 	w.WriteHeader(http.StatusNoContent)
 
 	//проверка на кол-во файлов: если 3 - передаем в канал для обработки воркерами
-	if task.FilesCount == 3 {
-		task.Unlock() //при блокировке канала чтобы другие рутины могли читать задачу
-		h.Pool.Channel <- task
-		task.Lock() //чтобы не словить панику при выполнении defer
+	if task.FilesCount.Load() == 3 {
+		select {
+		case <-h.Pool.Done: //cинхронизация с закрытием канала, если получен os.Exit
+			return
+		case h.Pool.Channel <- task:
+		}
 	}
 }
 
@@ -129,10 +134,19 @@ func (h *TasksHandler) StatusCheck(w http.ResponseWriter, r *http.Request) {
 	}
 	task.RLock()
 	defer task.RUnlock()
+
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
 	if err := json.NewEncoder(w).Encode(task); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to encode task '%v' info", tid), http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
+}
+
+func (h *TasksHandler) ReturnArchive(w http.ResponseWriter, r *http.Request) {
+	archiveName := chi.URLParam(r, "archive_name")
+	filePath := filepath.Join("archive", archiveName)
+
+	http.ServeFile(w, r, filePath)
 }
