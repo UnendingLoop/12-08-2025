@@ -35,7 +35,13 @@ func main() {
 	r.Get("/archive/{task_id}/{file_name}", taskHandler.ReturnArchive) //скачивание архива
 
 	//Starting server
-	srv := http.Server{Addr: (":" + strconv.Itoa(config.AppPort)), Handler: r}
+	srv := http.Server{
+		Addr:         (":" + strconv.Itoa(config.AppPort)),
+		Handler:      r,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  120 * time.Second}
+
 	go func() {
 		log.Printf("Launching server on http://localhost:%d", config.AppPort)
 		err := srv.ListenAndServe()

@@ -20,6 +20,10 @@ type TasksHandler struct {
 
 // CreateNewTask - creates a task in model.TasksMap.Mapa if there are less than 3 tasks in progress
 func (h *TasksHandler) CreateNewTask(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	if h.Pool.ActiveTasksCount.Load() == 3 {
 		http.Error(w, fmt.Sprintf("Failed to create new task: %v.", model.ErrBusy), http.StatusServiceUnavailable)
 		return
@@ -47,6 +51,10 @@ func (h *TasksHandler) CreateNewTask(w http.ResponseWriter, r *http.Request) {
 
 // AddLinkToTask checks if such task exists by ID from path, creates model.FileInfo and adds to task. If there are 3 files in task - sends it to chan
 func (h *TasksHandler) AddLinkToTask(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	tid := chi.URLParam(r, "id")
 	if tid == "" {
 		http.Error(w, "Empty task ID", http.StatusBadRequest)
@@ -69,7 +77,7 @@ func (h *TasksHandler) AddLinkToTask(w http.ResponseWriter, r *http.Request) {
 	}
 	newLink := model.NewLink{}
 	if err := json.NewDecoder(r.Body).Decode(&newLink); err != nil { //должен считаться только URL
-		http.Error(w, fmt.Sprintf("Failed to decode task '%s' info", tid), http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("Failed to decode task '%s' file link", tid), http.StatusBadRequest)
 		return
 	}
 	if newLink.URL == "" {
@@ -128,6 +136,10 @@ func (h *TasksHandler) AddLinkToTask(w http.ResponseWriter, r *http.Request) {
 
 // StatusCheck provides task info if it exists. Field Archive is passed only if the task is complete.
 func (h *TasksHandler) StatusCheck(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Only GET method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	tid := chi.URLParam(r, "id")
 	if tid == "" {
 		http.Error(w, "Empty task ID", http.StatusBadRequest)
@@ -153,9 +165,18 @@ func (h *TasksHandler) StatusCheck(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ReturnArchive returns an archive according to task id and archive name
 func (h *TasksHandler) ReturnArchive(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Only GET method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	taskID := chi.URLParam(r, "task_id")
 	archName := chi.URLParam(r, "file_name")
+	if taskID == "" || archName == "" {
+		http.Error(w, "Invalid link to archive", http.StatusBadRequest)
+		return
+	}
 	filePath := filepath.Join(h.Pool.ArchDir, taskID, archName)
 
 	http.ServeFile(w, r, filePath)
