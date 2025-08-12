@@ -1,10 +1,10 @@
 package main
 
 import (
+	"12-08-2025/cmd/app/config"
 	"12-08-2025/cmd/handler"
 	"12-08-2025/cmd/model"
 	"12-08-2025/cmd/service"
-	"12-08-2025/config"
 	"context"
 	"log"
 	"net/http"
