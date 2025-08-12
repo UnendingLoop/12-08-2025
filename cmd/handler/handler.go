@@ -28,9 +28,11 @@ func (h *TasksHandler) CreateNewTask(w http.ResponseWriter, r *http.Request) {
 	h.Pool.Lock()
 	newID := uuid.New().String()
 	newTask := &model.Task{
-		TID:    newID,
-		Files:  []*model.FileInfo{},
-		Status: model.StatusPending}
+		TID:     newID,
+		Files:   []*model.FileInfo{},
+		Status:  model.StatusPending,
+		ArchDir: h.Pool.ArchDir,
+		TmpDir:  h.Pool.TmpDir}
 
 	h.Pool.Mapa[newID] = newTask
 	h.Pool.Unlock()
@@ -51,9 +53,9 @@ func (h *TasksHandler) AddLinkToTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.Pool.Lock()
+	h.Pool.RLock()
 	task, exists := h.Pool.Mapa[tid]
-	h.Pool.Unlock()
+	h.Pool.RUnlock()
 
 	task.Lock()
 	if !exists {
@@ -70,6 +72,10 @@ func (h *TasksHandler) AddLinkToTask(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Failed to decode task '%s' info", tid), http.StatusBadRequest)
 		return
 	}
+	if newLink.URL == "" {
+		http.Error(w, "Specified URL is empty", http.StatusBadRequest)
+		return
+	}
 	//чистка от пробелов + валидация по фортмау
 	newLink.URL = strings.TrimSpace(newLink.URL)
 	if _, err := url.ParseRequestURI(newLink.URL); err != nil {
@@ -78,12 +84,15 @@ func (h *TasksHandler) AddLinkToTask(w http.ResponseWriter, r *http.Request) {
 	}
 	//проверка расширения файла
 	found := false
-	for _, v := range model.ValidExt {
+	h.Pool.RLock()
+	for _, v := range h.Pool.ValidExt {
 		if strings.HasSuffix(newLink.URL, v) {
 			found = true
 			break
 		}
 	}
+	h.Pool.RUnlock()
+
 	if !found {
 		http.Error(w, fmt.Sprintf("Failed to add link: %v", model.ErrFileFormat), http.StatusBadRequest)
 		return
@@ -97,8 +106,8 @@ func (h *TasksHandler) AddLinkToTask(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
 	newFile := model.FileInfo{URL: newLink.URL}
+
 	newFile.Status = model.StatusPending
 	task.Files = append(task.Files, &newFile)
 	task.Unlock()
@@ -145,8 +154,9 @@ func (h *TasksHandler) StatusCheck(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TasksHandler) ReturnArchive(w http.ResponseWriter, r *http.Request) {
-	archiveName := chi.URLParam(r, "archive_name")
-	filePath := filepath.Join("archive", archiveName)
+	taskID := chi.URLParam(r, "task_id")
+	archName := chi.URLParam(r, "file_name")
+	filePath := filepath.Join(h.Pool.ArchDir, taskID, archName)
 
 	http.ServeFile(w, r, filePath)
 }

@@ -36,10 +36,9 @@ func TaskManager(wg *sync.WaitGroup, input chan *model.Task, activeTasksCounter 
 		}
 		task.Unlock()
 		internalTask.Files = tempFiles
-		log.Printf("222 TaskManager is working with INTERNAL COPY: %v", task)
 
 		// Создание временной папки для файлов задачи
-		tempDir := filepath.Join(os.TempDir(), internalTask.TID)
+		tempDir := filepath.Join(internalTask.TmpDir, internalTask.TID)
 		if err := os.MkdirAll(tempDir, 0755); err != nil {
 			log.Println("failed to create temp dir:", err)
 
@@ -60,18 +59,18 @@ func TaskManager(wg *sync.WaitGroup, input chan *model.Task, activeTasksCounter 
 		task.Unlock()
 
 		// Архивирование
-		archiveDir := "archive"
-		if err := os.MkdirAll(archiveDir, 0755); err != nil {
-			log.Println("failed to create archive dir:", err)
+		//создание индивидуальной папки для архива
+		archDir := filepath.Join(internalTask.ArchDir, internalTask.TID)
+		if err := os.MkdirAll(archDir, 0755); err != nil {
+			log.Fatalf("Failed to create unique ARCHIVE directory: %v", err)
 			internalTask.Status = model.StatusError
 			activeTasksCounter.Add(-1)
 			continue
 		}
+		archName := "archive.zip"
+		archPath := filepath.Join(archDir, archName)
 
-		archName := internalTask.TID + ".zip"
-		archivePath := filepath.Join(archiveDir, archName)
-
-		if archFiles, err := archiver(internalTask.Files, internalTask.TID, archivePath, tempDir); len(err) != 0 {
+		if archFiles, err := archiver(internalTask.Files, internalTask.TID, archPath, tempDir); len(err) != 0 {
 			log.Printf("Problems while creating archive for task '%s':%v", internalTask.TID, err)
 			internalTask.Files = archFiles
 			internalTask.Status = model.StatusError
@@ -80,7 +79,7 @@ func TaskManager(wg *sync.WaitGroup, input chan *model.Task, activeTasksCounter 
 		}
 
 		// Обновляем ссылку на архив — для отдачи клиенту
-		archLink := "/archive/" + archName
+		archLink := "/" + archPath
 		internalTask.Archive = &archLink
 		internalTask.Status = model.StatusReady
 
@@ -91,7 +90,6 @@ func TaskManager(wg *sync.WaitGroup, input chan *model.Task, activeTasksCounter 
 		task.Status = internalTask.Status
 		task.Archive = internalTask.Archive
 		task.Unlock()
-		log.Printf("Task '%v' info:\n%v", internalTask.TID, internalTask)
 	}
 }
 

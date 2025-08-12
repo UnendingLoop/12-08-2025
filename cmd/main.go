@@ -4,11 +4,13 @@ import (
 	"09-09-2025/cmd/handler"
 	"09-09-2025/cmd/model"
 	"09-09-2025/cmd/service"
+	"09-09-2025/config"
 	"context"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"time"
 
@@ -16,31 +18,32 @@ import (
 )
 
 func main() {
-	//создание папки archive, если её нет
-	if err := os.MkdirAll("archive", 0755); err != nil {
-		log.Fatalf("Failed to create archive directory: %v", err)
-	}
+	//загрузка параметров из env. и создание временной папки и папки для хранения архивов
+	config := config.GetConfig()
+	log.Printf("Config loaded this:\n%v", config)
+	test := append(config.ValidExt, config.ValidExt...)
+	log.Printf("Config TEST loaded this:\n%v", test)
 
 	wg := sync.WaitGroup{}
 
 	r := chi.NewRouter()
-	taskHandler := handler.TasksHandler{Pool: &model.TasksMap{Mapa: make(map[string]*model.Task), Channel: make(chan *model.Task, 9), Done: make(chan struct{})}}
+	taskHandler := handler.TasksHandler{Pool: &model.TasksMap{Mapa: make(map[string]*model.Task), Channel: make(chan *model.Task, 9), Done: make(chan struct{}), ValidExt: config.ValidExt, ArchDir: config.ArchDir, TmpDir: config.TmpDir}}
 
-	r.Post("/tasks", taskHandler.CreateNewTask)                 //создание задачи, возвращает ID
-	r.Get("/tasks/{id}", taskHandler.StatusCheck)               //получение статуса задачи(возможно со ссылкой на скачивание архива если готово)
-	r.Post("/tasks/{id}", taskHandler.AddLinkToTask)            //добавление ссылки на скачивание файла - 1 ссылка за раз
-	r.Get("/archive/{archive_name}", taskHandler.ReturnArchive) //скачивание архива
+	r.Post("/tasks", taskHandler.CreateNewTask)                        //создание задачи, возвращает ID
+	r.Get("/tasks/{id}", taskHandler.StatusCheck)                      //получение статуса задачи(возможно со ссылкой на скачивание архива если готово)
+	r.Post("/tasks/{id}", taskHandler.AddLinkToTask)                   //добавление ссылки на скачивание файла - 1 ссылка за раз
+	r.Get("/archive/{task_id}/{file_name}", taskHandler.ReturnArchive) //скачивание архива
 
 	//Starting server
-	srv := http.Server{Addr: ":8080", Handler: r}
+	srv := http.Server{Addr: (":" + strconv.Itoa(config.AppPort)), Handler: r}
 	go func() {
-		log.Printf("Launching server on http://localhost:8080")
-		if err := srv.ListenAndServe(); err != nil {
+		log.Printf("Launching server on http://localhost:%d", config.AppPort)
+		err := srv.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server stopped: %v", err)
 		}
+		log.Println("Server gracefully stopping...")
 	}()
-
-	log.Printf("Server launched successfully!")
 
 	//Starting shutdown signal listener
 	sig := make(chan os.Signal, 1)
@@ -56,10 +59,17 @@ func main() {
 		if err := srv.Shutdown(ctx); err != nil {
 			log.Printf("Server shutdown error: %v", err)
 		}
-		log.Println("HTTP server stopped")
+		log.Println("HTTP server stopped, waiting for goroutines...")
 		close(taskHandler.Pool.Done)
 		close(taskHandler.Pool.Channel)
 		wg.Done()
+		log.Println("Goroutines finished.\nRemoving TEMP-directory...")
+		err := os.RemoveAll(config.TmpDir)
+		if err != nil {
+			log.Printf("Failed to remove TEMP-directory: %v\nExiting application.", err)
+			return
+		}
+		log.Printf("Removing DONE\nExiting application.")
 	}()
 
 	//Starting TaskManager - 3 workers

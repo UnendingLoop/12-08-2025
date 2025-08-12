@@ -18,10 +18,12 @@ const (
 type Task struct {
 	TID        string       `json:"id"`
 	FilesCount atomic.Int32 `json:"-"`
-	Files      []*FileInfo  `json:"files_info"`
+	Files      []*FileInfo  `json:"files"`
 	Status     Status       `json:"task_status"`
-	Archive    *string      `json:"archive_link,omitempty"`
+	Archive    *string      `json:"archive_URI,omitempty"`
 	sync.RWMutex
+	TmpDir  string `json:"-"`
+	ArchDir string `json:"-"`
 }
 
 type FileInfo struct {
@@ -33,13 +35,22 @@ type FileInfo struct {
 
 type TasksMap struct {
 	Mapa             map[string]*Task
-	ActiveTasksCount atomic.Int32 //для отслеживания загруженности
-	Channel          chan *Task
-	sync.RWMutex                   //только для доступа к мапе
-	Done             chan struct{} // сигнал на завершение
+	ActiveTasksCount atomic.Int32 //для отслеживания загруженности, макс 3
+	Channel          chan *Task   //сюда отправлять экземпляры задач
+	sync.RWMutex
+	Done     chan struct{} // сигнал на завершение
+	ValidExt []string
+	TmpDir   string
+	ArchDir  string
 }
 type NewLink struct {
 	URL string `json:"file_URL"`
+}
+type Config struct {
+	ValidExt []string
+	AppPort  int
+	TmpDir   string
+	ArchDir  string
 }
 
 var (
@@ -49,6 +60,4 @@ var (
 	ErrInvalidLink    = errors.New("invalid download-link format")
 	ErrTaskIsFull     = errors.New("the task aleady contains max number of files")
 	ErrBusy           = errors.New("already processing max number of tasks. Try again later")
-
-	ValidExt = []string{".pdf", ".jpeg", ".jpg"}
 )
