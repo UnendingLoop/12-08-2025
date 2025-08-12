@@ -20,9 +20,6 @@ import (
 func main() {
 	//загрузка параметров из env. и создание временной папки и папки для хранения архивов
 	config := config.GetConfig()
-	log.Printf("Config loaded this:\n%v", config)
-	test := append(config.ValidExt, config.ValidExt...)
-	log.Printf("Config TEST loaded this:\n%v", test)
 
 	wg := sync.WaitGroup{}
 
