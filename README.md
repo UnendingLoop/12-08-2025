@@ -36,8 +36,8 @@
 
 1. Склонировать репозиторий:
    ```bash
-   git clone https://github.com/UnendingLoop/09-09-2025.git
-   cd 09-09-2025
+   git clone https://github.com/UnendingLoop/12-08-2025.git
+   cd 12-08-2025
    ```
 
 2. Установить зависимости:

@@ -1,7 +1,7 @@
 package config
 
 import (
-	"09-09-2025/cmd/model"
+	"12-08-2025/cmd/model"
 	"encoding/json"
 	"log"
 	"os"

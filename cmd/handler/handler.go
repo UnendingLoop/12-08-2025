@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"09-09-2025/cmd/model"
+	"12-08-2025/cmd/model"
 	"encoding/json"
 	"fmt"
 	"net/http"
